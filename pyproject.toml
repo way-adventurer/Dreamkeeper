@@ -1,0 +1,37 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "dreamkeeper"
+version = "0.1.0"
+description = "Dreamkeeper, a local-first runtime that watches research workloads and wakes AI only when they finish."
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+authors = [{ name = "Dreamkeeper contributors" }]
+dependencies = [
+  "lark-oapi>=1.5,<2",
+]
+keywords = ["experiments", "research", "codex", "ssh", "gpu", "agent"]
+classifiers = [
+  "Development Status :: 3 - Alpha",
+  "Intended Audience :: Developers",
+  "License :: OSI Approved :: MIT License",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3 :: Only",
+]
+
+[project.scripts]
+dreamkeeper = "runrelay.cli:main"
+runrelay = "runrelay.cli:main"
+
+[project.optional-dependencies]
+dev = ["pytest>=8"]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]
+testpaths = ["tests"]

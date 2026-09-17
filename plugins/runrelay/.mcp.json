@@ -1,0 +1,21 @@
+{
+  "mcpServers": {
+    "runrelay": {
+      "command": "python",
+      "args": ["./scripts/runrelay_mcp.py"],
+      "cwd": ".",
+      "enabled": true,
+      "default_tools_approval_mode": "prompt",
+      "tools": {
+        "runrelay_submit_experiment": {
+          "approval_mode": "prompt"
+        },
+        "runrelay_cancel_experiment": {
+          "approval_mode": "prompt"
+        }
+      },
+      "startup_timeout_sec": 10,
+      "tool_timeout_sec": 3600
+    }
+  }
+}
