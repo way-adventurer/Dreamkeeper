@@ -47,6 +47,24 @@ def test_disabled_feishu_connector_does_not_send(tmp_path: Path):
     assert calls == []
 
 
+def test_webhook_connector_can_notify_without_feishu(tmp_path: Path):
+    notifier = FeishuCliNotifier(tmp_path)
+    notifier.save_webhook_config({"enabled": True, "url": "https://hooks.example.test/dreamkeeper"})
+    delivered = []
+    notifier._send_webhook = lambda config, payload: delivered.append(payload) or {"ok": True, "transport": "webhook"}
+    monitor = ProcessMonitor(id="mon_webhook", server_id="srv_test", pid=7, status="COMPLETED")
+    profile = ServerProfile(id="srv_test", name="server", host="host")
+
+    result = notifier.notify_completed(monitor, profile)
+
+    assert result["feishu"] is None
+    assert result["webhook"]["ok"] is True
+    assert delivered[0]["event"] == "completed"
+    assert notifier.public_webhook_config() == {
+        "enabled": True, "url": "https://hooks.example.test/dreamkeeper", "secret_set": False,
+    }
+
+
 def test_feishu_connector_can_discover_current_user(tmp_path: Path):
     calls = []
 

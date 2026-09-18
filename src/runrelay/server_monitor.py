@@ -11,7 +11,7 @@ from typing import Callable
 
 from .models import GPUSnapshot, ProcessMonitor, ProcessSnapshot, ServerProfile, ServerSnapshot
 from .monitor import ensure_daemon
-from .notifications import FeishuCliNotifier, FeishuNotificationError
+from .notifications import FeishuCliNotifier, FeishuNotificationError, WebhookNotificationError
 from .storage import Storage
 
 
@@ -269,9 +269,9 @@ class ServerMonitorService:
             self._write_log(monitor, f"completed {monitor.ended_at}; target process ended")
             try:
                 self.notifier.notify_completed(monitor, profile)
-            except FeishuNotificationError as exc:
+            except (FeishuNotificationError, WebhookNotificationError) as exc:
                 # Completion must remain recorded even if an optional notification fails.
-                self._write_log(monitor, f"Feishu notification failed: {exc}")
+                self._write_log(monitor, f"Connector notification failed: {exc}")
         self.storage.put_monitor(monitor)
         return monitor
 

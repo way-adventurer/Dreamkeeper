@@ -21,6 +21,32 @@ class FeishuNotificationError(RuntimeError):
     pass
 
 
+class WebhookNotificationError(RuntimeError):
+    pass
+
+
+@dataclass
+class WebhookConfig:
+    """A small, provider-neutral outbound connector.
+
+    It intentionally speaks ordinary JSON so the same connector works with
+    Slack/Discord/Teams/n8n/Make and a user's own tiny HTTP endpoint.
+    """
+
+    enabled: bool = False
+    url: str = ""
+    secret: str = ""
+
+    @classmethod
+    def from_dict(cls, value: dict[str, object] | None) -> "WebhookConfig":
+        value = value or {}
+        return cls(bool(value.get("enabled", False)), str(value.get("url", "") or "").strip(), str(value.get("secret", "") or "").strip())
+
+    def validate(self) -> None:
+        if self.enabled and not self.url.startswith(("http://", "https://")):
+            raise ValueError("Webhook URL must use http:// or https://")
+
+
 @dataclass
 class FeishuConfig:
     enabled: bool = False
@@ -272,6 +298,7 @@ class FeishuNotifier:
         self.root = root
         self.config_path = root / "feishu-connector.json"
         self.runtime_path = root / "feishu-runtime.json"
+        self.webhook_config_path = root / "webhook-connector.json"
         self.runner = runner or subprocess.run
         self.long_connection = FeishuLongConnection(self)
 
@@ -336,9 +363,43 @@ class FeishuNotifier:
             raise FeishuNotificationError("请先启用飞书完成通知")
         return self._send(config, "守梦连接测试\n飞书连接器已准备好接收任务完成通知。", "test")
 
+    def get_webhook_config(self) -> WebhookConfig:
+        try:
+            value = json.loads(self.webhook_config_path.read_text(encoding="utf-8"))
+        except (FileNotFoundError, OSError, json.JSONDecodeError):
+            value = {}
+        config = WebhookConfig.from_dict(value if isinstance(value, dict) else {})
+        config.validate()
+        return config
+
+    def save_webhook_config(self, value: dict[str, object]) -> WebhookConfig:
+        current = self.get_webhook_config()
+        merged = {"enabled": current.enabled, "url": current.url, "secret": current.secret}
+        merged.update(value)
+        if not str(value.get("secret") or "").strip():
+            merged["secret"] = current.secret
+        config = WebhookConfig.from_dict(merged)
+        config.validate()
+        self.root.mkdir(parents=True, exist_ok=True)
+        temporary = self._temporary_path(self.webhook_config_path)
+        temporary.write_text(json.dumps({"enabled": config.enabled, "url": config.url, "secret": config.secret}, indent=2), encoding="utf-8")
+        temporary.replace(self.webhook_config_path)
+        return config
+
+    def public_webhook_config(self) -> dict[str, object]:
+        config = self.get_webhook_config()
+        return {"enabled": config.enabled, "url": config.url, "secret_set": bool(config.secret)}
+
+    def send_webhook_test(self) -> dict[str, object]:
+        config = self.get_webhook_config()
+        if not config.enabled:
+            raise WebhookNotificationError("请先启用 Webhook 连接器")
+        return self._send_webhook(config, {"event": "test", "text": "守梦连接测试\nWebhook 连接器已准备好接收任务完成通知。"})
+
     def notify_completed(self, monitor: ProcessMonitor, profile: ServerProfile) -> dict[str, object] | None:
         config = self.get_config()
-        if not config.enabled:
+        webhook = self.get_webhook_config()
+        if not config.enabled and not webhook.enabled:
             return None
         process = monitor.summary.get("target_processes", [{}])[0] if monitor.summary else {}
         command = str(process.get("command") or f"PID {monitor.pid or '—'}")
@@ -351,7 +412,23 @@ class FeishuNotifier:
             f"结束时间：{monitor.ended_at or '—'}\n"
             f"GPU：{gpu_count} 张"
         )
-        return self._send(config, text, monitor.id)
+        result = self._send(config, text, monitor.id) if config.enabled else None
+        if webhook.enabled:
+            result = {"feishu": result, "webhook": self._send_webhook(webhook, {"event": "completed", "text": text, "monitor_id": monitor.id, "server": profile.name})}
+        return result
+
+    def _send_webhook(self, config: WebhookConfig, payload: dict[str, object]) -> dict[str, object]:
+        request = Request(config.url, data=json.dumps(payload, ensure_ascii=False).encode("utf-8"), method="POST")
+        request.add_header("Content-Type", "application/json; charset=utf-8")
+        if config.secret:
+            request.add_header("Authorization", f"Bearer {config.secret}")
+        try:
+            with urlopen(request, timeout=15) as response:  # noqa: S310
+                status = getattr(response, "status", 200)
+                response.read()
+        except (HTTPError, URLError, TimeoutError, OSError) as exc:
+            raise WebhookNotificationError(f"Webhook request failed: {exc}") from exc
+        return {"ok": True, "transport": "webhook", "status": status}
 
     def record_inbound_target(self, chat_id: str, chat_type: str, *, text: str = "") -> None:
         config = self.get_config()
