@@ -32,6 +32,22 @@ dreamkeeper ui --host 127.0.0.1 --port 8765
 
 Open <http://127.0.0.1:8765>. The monitor is available at `/`; SSH profiles and connectors are managed at `/servers`.
 
+### Windows desktop build
+
+If you prefer not to use a terminal, double-click the prominent [`Dreamkeeper.exe`](Dreamkeeper.exe)
+in the repository root, or download the same file from a project release. The launcher starts the
+local dashboard and opens your browser automatically. It stores data under `~/.dreamkeeper` (or the
+existing legacy `~/.runrelay` directory) and never needs an SSH server or GPU to start.
+
+To build the executable locally:
+
+```powershell
+.\packaging\build_windows.ps1
+```
+
+The build also copies the executable to the repository root for one-click access. Set `DREAMKEEPER_HOME`, `DREAMKEEPER_HOST`, or
+`DREAMKEEPER_PORT` before launching if you need a custom data directory or port.
+
 For an existing SSH host:
 
 ```bash
@@ -60,9 +76,14 @@ dreamkeeper monitor start --server-id <server-id> --command-filter train.py --in
 | --- | --- | --- | --- |
 | Feishu / Lark | Inbound + outbound | Discover a chat and send completion messages | App Secret stays local and is never returned to the browser |
 | Generic Webhook | Outbound | Slack, Discord, Teams, n8n, Make, or custom services | Optional bearer token stays local and is never returned |
+| Telegram | Config + readiness test | BotFather token, polling, optional chat ID | The browser only sees whether the bot token is set |
+| WhatsApp | Configuration | Local session, QR/pairing auth, Meta Cloud legacy fields | Session paths and access tokens stay local |
+| QQ | Config + credential validation | Direct gateway, App ID/App Secret, discovered OpenID | App Secret is never returned to the browser |
+| WeChat | Configuration | iLink base URL, local session directory, command prefix | Session paths remain local |
+| Rokid Glasses | Configuration | Public base URL, SSE path, Agent AK/SK | AK/SK values are never returned to the browser |
 | File / command / Codex CLI | Outbound | Local scripts and agent wake-ups | Uses the local filesystem/process environment |
 
-Configure connectors from **`/servers` → Connectors** or through the `/api/connectors/*` endpoints. Webhook completion events are ordinary JSON:
+Configure connectors from **`/servers` → Connectors** or through the `/api/connectors/*` endpoints. Every connector detail page includes a **Setup guide** button with prerequisites, steps, and safety notes. WeChat stores an iLink profile locally; QR binding is completed by the connector runtime. Webhook completion events are ordinary JSON:
 
 ```json
 {"event":"completed","text":"守梦任务已完成...","monitor_id":"mon_xxx","server":"Training GPU"}

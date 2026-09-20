@@ -5,6 +5,15 @@ __pycache__/
 .venv/
 dist/
 build/
+dist-next/
+build-next/
+dist-next2/
+build-next2/
+dist-next3/
+build-next3/
+dist-next4/
+build-next4/
+*.spec
 .runrelay/
 runrelay.db
 .dreamkeeper/

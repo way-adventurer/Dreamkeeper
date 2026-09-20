@@ -16,17 +16,30 @@ def ensure_daemon(root: Path, interval: float = 5.0) -> int:
     if pid_file.exists():
         pid_file.unlink(missing_ok=True)
 
-    command = [
-        sys.executable,
-        "-m",
-        "runrelay.cli",
-        "--home",
-        str(root),
-        "daemon",
-        "run",
-        "--interval",
-        str(interval),
-    ]
+    if getattr(sys, "frozen", False):
+        # In a PyInstaller build sys.executable is Dreamkeeper.exe itself.
+        # Use the launcher’s explicit daemon mode; invoking ``-m runrelay``
+        # would recursively open a new dashboard window.
+        command = [
+            sys.executable,
+            "--dreamkeeper-daemon",
+            "--home",
+            str(root),
+            "--interval",
+            str(interval),
+        ]
+    else:
+        command = [
+            sys.executable,
+            "-m",
+            "runrelay.cli",
+            "--home",
+            str(root),
+            "daemon",
+            "run",
+            "--interval",
+            str(interval),
+        ]
     options: dict[str, object] = {
         "stdin": subprocess.DEVNULL,
         "stdout": subprocess.DEVNULL,

@@ -7,6 +7,7 @@ import os
 import shutil
 import subprocess
 import threading
+import time
 from dataclasses import dataclass
 from importlib import import_module
 from pathlib import Path
@@ -23,6 +24,44 @@ class FeishuNotificationError(RuntimeError):
 
 class WebhookNotificationError(RuntimeError):
     pass
+
+
+class ConnectorConfigError(ValueError):
+    pass
+
+
+CONNECTOR_SPECS: dict[str, dict[str, object]] = {
+    "telegram": {
+        "label": "Telegram",
+        "default_transport": "polling",
+        "defaults": {"enabled": False, "transport": "polling", "bot_name": "守梦", "bot_token": "", "chat_id": "", "command_prefix": "/", "require_mention_in_groups": True},
+        "secret_fields": {"bot_token"},
+    },
+    "whatsapp": {
+        "label": "WhatsApp",
+        "default_transport": "local_session",
+        "defaults": {"enabled": False, "transport": "local_session", "auth_method": "qr_browser", "session_dir": "~/.dreamkeeper/connectors/whatsapp", "command_prefix": "/"},
+        "secret_fields": {"access_token", "verify_token"},
+    },
+    "qq": {
+        "label": "QQ",
+        "default_transport": "gateway_direct",
+        "defaults": {"enabled": False, "transport": "gateway_direct", "bot_name": "守梦", "app_id": "", "app_secret": "", "main_chat_id": "", "command_prefix": "/", "require_at_in_groups": True},
+        "secret_fields": {"app_secret"},
+    },
+    "weixin": {
+        "label": "WeChat",
+        "default_transport": "ilink",
+        "defaults": {"enabled": False, "transport": "ilink", "bot_name": "守梦", "api_base_url": "https://ilinkai.weixin.qq.com", "session_dir": "~/.dreamkeeper/connectors/weixin", "command_prefix": "/"},
+        "secret_fields": {"bot_token"},
+    },
+    "rokid": {
+        "label": "Rokid Glasses",
+        "default_transport": "sse",
+        "defaults": {"enabled": False, "transport": "sse", "public_base_url": "", "sse_path": "/metis/agent/api/sse", "agent_ak": "", "agent_sk": ""},
+        "secret_fields": {"agent_ak", "agent_sk"},
+    },
+}
 
 
 @dataclass
@@ -299,6 +338,7 @@ class FeishuNotifier:
         self.config_path = root / "feishu-connector.json"
         self.runtime_path = root / "feishu-runtime.json"
         self.webhook_config_path = root / "webhook-connector.json"
+        self.connectors_config_path = root / "connectors.json"
         self.runner = runner or subprocess.run
         self.long_connection = FeishuLongConnection(self)
 
@@ -330,7 +370,7 @@ class FeishuNotifier:
         self.root.mkdir(parents=True, exist_ok=True)
         temporary = self._temporary_path(self.config_path)
         temporary.write_text(json.dumps(config.to_dict(), ensure_ascii=False, indent=2), encoding="utf-8")
-        temporary.replace(self.config_path)
+        self._replace_with_retry(temporary, self.config_path)
         self.long_connection.restart()
         return config
 
@@ -383,7 +423,7 @@ class FeishuNotifier:
         self.root.mkdir(parents=True, exist_ok=True)
         temporary = self._temporary_path(self.webhook_config_path)
         temporary.write_text(json.dumps({"enabled": config.enabled, "url": config.url, "secret": config.secret}, indent=2), encoding="utf-8")
-        temporary.replace(self.webhook_config_path)
+        self._replace_with_retry(temporary, self.webhook_config_path)
         return config
 
     def public_webhook_config(self) -> dict[str, object]:
@@ -395,6 +435,96 @@ class FeishuNotifier:
         if not config.enabled:
             raise WebhookNotificationError("请先启用 Webhook 连接器")
         return self._send_webhook(config, {"event": "test", "text": "守梦连接测试\nWebhook 连接器已准备好接收任务完成通知。"})
+
+    def _read_connectors(self) -> dict[str, dict[str, object]]:
+        try:
+            value = json.loads(self.connectors_config_path.read_text(encoding="utf-8"))
+        except (FileNotFoundError, OSError, json.JSONDecodeError):
+            return {}
+        if not isinstance(value, dict):
+            raise ConnectorConfigError("Connector configuration must be a JSON object")
+        return {str(key): item for key, item in value.items() if isinstance(item, dict)}
+
+    @staticmethod
+    def _connector_spec(name: str) -> dict[str, object]:
+        try:
+            return CONNECTOR_SPECS[name]
+        except KeyError as exc:
+            raise ConnectorConfigError(f"Unsupported connector: {name}") from exc
+
+    def get_connector_config(self, name: str) -> dict[str, object]:
+        spec = self._connector_spec(name)
+        defaults = dict(spec["defaults"])  # type: ignore[arg-type]
+        defaults.update(self._read_connectors().get(name, {}))
+        return defaults
+
+    def _validate_connector(self, name: str, config: dict[str, object]) -> None:
+        self._connector_spec(name)
+        if config.get("enabled") is not True:
+            return
+        transport = str(config.get("transport") or "").strip()
+        if name == "telegram" and not str(config.get("bot_token") or "").strip():
+            raise ConnectorConfigError("Telegram requires a BotFather bot token")
+        if name == "qq" and (not str(config.get("app_id") or "").strip() or not str(config.get("app_secret") or "").strip()):
+            raise ConnectorConfigError("QQ requires App ID and App Secret")
+        if name == "rokid" and not str(config.get("public_base_url") or "").startswith(("http://", "https://")):
+            raise ConnectorConfigError("Rokid requires a public http(s) base URL")
+        if name == "whatsapp" and transport == "legacy_meta_cloud":
+            if not str(config.get("access_token") or "").strip() or not str(config.get("phone_number_id") or "").strip():
+                raise ConnectorConfigError("WhatsApp Cloud mode requires access token and phone number ID")
+        if name == "weixin" and not str(config.get("api_base_url") or "").startswith(("http://", "https://")):
+            raise ConnectorConfigError("WeChat API base URL must use http:// or https://")
+
+    def save_connector_config(self, name: str, value: dict[str, object]) -> dict[str, object]:
+        current = self.get_connector_config(name)
+        spec = self._connector_spec(name)
+        merged = dict(current)
+        merged.update(value)
+        for field in spec["secret_fields"]:  # type: ignore[union-attr]
+            if not str(value.get(field) or "").strip():
+                merged[field] = current.get(field, "")
+        self._validate_connector(name, merged)
+        configs = self._read_connectors()
+        configs[name] = merged
+        self.root.mkdir(parents=True, exist_ok=True)
+        temporary = self._temporary_path(self.connectors_config_path)
+        temporary.write_text(json.dumps(configs, ensure_ascii=False, indent=2), encoding="utf-8")
+        self._replace_with_retry(temporary, self.connectors_config_path)
+        return self.public_connector_config(name)
+
+    def public_connector_config(self, name: str) -> dict[str, object]:
+        config = self.get_connector_config(name)
+        spec = self._connector_spec(name)
+        secret_fields = set(spec["secret_fields"])  # type: ignore[arg-type]
+        fields = {key: value for key, value in config.items() if key not in secret_fields}
+        return {
+            "name": name,
+            "label": spec["label"],
+            "enabled": bool(config.get("enabled")),
+            "transport": config.get("transport"),
+            "fields": fields,
+            "secret_set": {key: bool(str(config.get(key) or "").strip()) for key in secret_fields},
+        }
+
+    def public_connectors(self) -> dict[str, object]:
+        return {"connectors": [self.public_connector_config(name) for name in CONNECTOR_SPECS]}
+
+    def test_connector(self, name: str) -> dict[str, object]:
+        config = self.get_connector_config(name)
+        self._validate_connector(name, config)
+        if not config.get("enabled"):
+            raise ConnectorConfigError("请先启用该连接器")
+        if name == "telegram":
+            token = str(config.get("bot_token") or "")
+            try:
+                with urlopen(f"https://api.telegram.org/bot{token}/getMe", timeout=10) as response:  # noqa: S310
+                    payload = json.loads(response.read().decode("utf-8", errors="replace") or "{}")
+            except (HTTPError, URLError, TimeoutError, OSError, json.JSONDecodeError) as exc:
+                raise ConnectorConfigError(f"Telegram readiness check failed: {exc}") from exc
+            if not payload.get("ok"):
+                raise ConnectorConfigError(str(payload.get("description") or "Telegram token rejected"))
+            return {"ok": True, "connector": name, "transport": config.get("transport"), "bot": payload.get("result", {}).get("username", "")}
+        return {"ok": True, "connector": name, "transport": config.get("transport"), "mode": "local validation"}
 
     def notify_completed(self, monitor: ProcessMonitor, profile: ServerProfile) -> dict[str, object] | None:
         config = self.get_config()
@@ -437,7 +567,7 @@ class FeishuNotifier:
         self.root.mkdir(parents=True, exist_ok=True)
         temporary = self._temporary_path(self.config_path)
         temporary.write_text(json.dumps(config.to_dict(), ensure_ascii=False, indent=2), encoding="utf-8")
-        temporary.replace(self.config_path)
+        self._replace_with_retry(temporary, self.config_path)
         self.write_runtime(
             connected=True,
             connection_state="connected",
@@ -455,11 +585,22 @@ class FeishuNotifier:
         self.root.mkdir(parents=True, exist_ok=True)
         temporary = self._temporary_path(self.runtime_path)
         temporary.write_text(json.dumps(state, ensure_ascii=False, indent=2), encoding="utf-8")
-        temporary.replace(self.runtime_path)
+        self._replace_with_retry(temporary, self.runtime_path)
 
     @staticmethod
     def _temporary_path(path: Path) -> Path:
         return path.with_name(f"{path.name}.{os.getpid()}.{threading.get_ident()}.tmp")
+
+    @staticmethod
+    def _replace_with_retry(temporary: Path, target: Path) -> None:
+        for attempt in range(8):
+            try:
+                temporary.replace(target)
+                return
+            except PermissionError:
+                if attempt == 7:
+                    raise
+                time.sleep(0.05 * (attempt + 1))
 
     def _read_runtime(self) -> dict[str, object]:
         try:

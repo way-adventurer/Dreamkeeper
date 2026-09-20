@@ -30,6 +30,21 @@ dreamkeeper ui --host 127.0.0.1 --port 8765
 
 打开 <http://127.0.0.1:8765>。监视首页是 `/`，SSH 服务器配置和连接器位于 `/servers`。
 
+### Windows 桌面版
+
+如果不想使用终端，直接双击仓库根目录醒目的 [`Dreamkeeper.exe`](Dreamkeeper.exe)，或从项目
+Release 下载同一文件即可运行。启动器会自动启动本地仪表盘并打开浏览器。数据默认保存在
+`~/.dreamkeeper`（如果已有旧版 `~/.runrelay` 则继续复用），启动时不需要 SSH 服务器或 GPU。
+
+本地构建 exe：
+
+```powershell
+.\packaging\build_windows.ps1
+```
+
+构建完成后会同时把 exe 复制到仓库根目录，便于一键启动。如需自定义数据目录、监听地址或端口，可设置
+`DREAMKEEPER_HOME`、`DREAMKEEPER_HOST`、`DREAMKEEPER_PORT`。
+
 已有 SSH 主机时：
 
 ```bash
@@ -58,9 +73,14 @@ dreamkeeper monitor start --server-id <server-id> --command-filter train.py --in
 | --- | --- | --- | --- |
 | 飞书 / Lark | 入站 + 出站 | 发现会话并发送任务完成消息 | App Secret 只保存在本机，不返回浏览器 |
 | 通用 Webhook | 出站 | Slack、Discord、Teams、n8n、Make 或自建服务 | 可选 Bearer Token 只保存在本机，不返回浏览器 |
+| Telegram | 配置 + 就绪测试 | BotFather Token、Polling、可选 Chat ID | Bot Token 只保存摘要，浏览器只看到是否已设置 |
+| WhatsApp | 配置 | 本地会话、二维码/配对码，兼容 Meta Cloud 字段 | 会话目录和访问令牌留在本机 |
+| QQ | 配置 + 凭据校验 | Gateway 直连、App ID/App Secret、自动发现 OpenID | App Secret 不返回浏览器 |
+| 微信 | 配置 | iLink 地址、本地会话目录和命令前缀 | 本地会话路径保存在本机 |
+| Rokid Glasses | 配置 | 公网地址、SSE 路径、Agent AK/SK | AK/SK 不返回浏览器 |
 | 文件 / 命令 / Codex CLI | 出站 | 本地脚本和 Agent 唤醒 | 使用本地文件系统和进程环境 |
 
-可在 **`/servers` → 连接器** 中配置，也可以调用 `/api/connectors/*` 接口。Webhook 完成事件使用普通 JSON：
+可在 **`/servers` → 连接器** 中配置，也可以调用 `/api/connectors/*` 接口。每个连接器详情页都提供 **配置教程** 按钮，展示准备事项、配置步骤和安全提示。微信页面保存 iLink 配置和本地会话目录，二维码绑定由连接器运行时完成。Webhook 完成事件使用普通 JSON：
 
 ```json
 {"event":"completed","text":"守梦任务已完成...","monitor_id":"mon_xxx","server":"Training GPU"}

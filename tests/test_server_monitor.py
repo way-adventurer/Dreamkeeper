@@ -134,6 +134,21 @@ def test_ssh_probe_normalizes_windows_newlines_before_remote_bash():
     assert b"\r" not in seen["script"]
 
 
+def test_ssh_probe_hides_console_window_on_windows(monkeypatch):
+    seen = {}
+
+    def fake_runner(_args, **kwargs):
+        seen.update(kwargs)
+        return subprocess.CompletedProcess(["ssh"], 0, "", "")
+
+    monkeypatch.setattr("runrelay.server_monitor.os.name", "nt")
+    profile = ServerProfile("srv", "Test", "gpu-test")
+    SSHProbe(fake_runner).run(profile, "printf ok\n")
+
+    assert "creationflags" in seen
+    assert seen["creationflags"] == getattr(subprocess, "CREATE_NO_WINDOW", 0)
+
+
 def test_delete_server_removes_saved_configuration(tmp_path):
     storage = Storage(tmp_path)
     service = ServerMonitorService(tmp_path, storage)

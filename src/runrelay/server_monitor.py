@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import base64
 import csv
+import os
 import shlex
 import subprocess
 import uuid
@@ -54,10 +55,18 @@ class SSHProbe:
             # SSH targets are commonly Linux even when RunRelay runs on Windows.
             # Do not let CRLF turn redirections and `set +e` into invalid Bash.
             script = script.replace("\r\n", "\n").replace("\r", "\n")
-            result = self.runner(
-                self._args(profile), input=script.encode("utf-8"), text=False, capture_output=True,
-                check=False, timeout=25,
-            )
+            options = {
+                "input": script.encode("utf-8"),
+                "text": False,
+                "capture_output": True,
+                "check": False,
+                "timeout": 25,
+            }
+            if os.name == "nt":
+                # OpenSSH is a console executable. Without CREATE_NO_WINDOW,
+                # every dashboard refresh briefly flashes an ssh.exe window.
+                options["creationflags"] = getattr(subprocess, "CREATE_NO_WINDOW", 0)
+            result = self.runner(self._args(profile), **options)
         except (OSError, subprocess.SubprocessError) as exc:
             raise ServerMonitorError(f"SSH connection failed for {profile.host}: {exc}") from exc
         stdout = result.stdout.decode("utf-8", errors="replace") if isinstance(result.stdout, bytes) else (result.stdout or "")

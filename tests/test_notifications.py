@@ -142,3 +142,26 @@ def test_native_feishu_connector_sends_to_discovered_chat(tmp_path: Path):
     assert result["ok"] is True
     assert requests[0][1]["app_secret"] == "example-secret"
     assert requests[1][1]["receive_id"] == "oc_test_chat"
+
+
+def test_generic_connector_profiles_save_secret_redacted_and_validate(tmp_path: Path):
+    notifier = FeishuCliNotifier(tmp_path)
+
+    saved = notifier.save_connector_config("telegram", {
+        "enabled": True,
+        "bot_token": "123:secret",
+        "chat_id": "chat-1",
+    })
+
+    assert saved["enabled"] is True
+    assert saved["fields"]["chat_id"] == "chat-1"
+    assert saved["secret_set"]["bot_token"] is True
+    assert "bot_token" not in saved["fields"]
+    assert notifier.public_connector_config("telegram")["secret_set"]["bot_token"] is True
+
+    try:
+        notifier.save_connector_config("qq", {"enabled": True, "app_id": "app-only"})
+    except ValueError as exc:
+        assert "App Secret" in str(exc)
+    else:
+        raise AssertionError("QQ credentials should be validated before save")
