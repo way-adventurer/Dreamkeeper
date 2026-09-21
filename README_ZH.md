@@ -9,7 +9,7 @@
 
 > **歇会吧，到我了。**
 
-Dreamkeeper（守梦）是一个本地优先的 AI 与 GPU 实验监视台。它会将实验从当前终端中独立出来，持续监视远程进程和服务器状态，并且只在任务真正结束时发送一次有用的完成通知。
+Dreamkeeper（守梦）是一个本地优先的 AI 与 GPU 实验守候台。它会将实验从当前终端中独立出来，持续守候远程进程和服务器状态，并且只在任务真正结束时发送一次有用的完成通知。
 
 ## 为什么使用守梦？
 
@@ -28,7 +28,7 @@ dreamkeeper list
 dreamkeeper ui --host 127.0.0.1 --port 8765
 ```
 
-打开 <http://127.0.0.1:8765>。监视首页是 `/`，SSH 服务器配置和连接器位于 `/servers`。
+打开 <http://127.0.0.1:8765>。守梦首页是 `/`，SSH 梦境配置和传音位于 `/servers`。
 
 ### Windows 桌面版
 
@@ -54,11 +54,11 @@ dreamkeeper wait <experiment-id>
 dreamkeeper logs <experiment-id>
 ```
 
-## 仪表盘与服务器监视
+## 仪表盘与梦境状态
 
-仪表盘包含监视页和服务器页：前者用于查看运行中的进程、完成状态、日志和实验任务；后者用于保存 SSH 配置、导入 VSCode/OpenSSH 配置、测试连接、刷新快照和启动只读实时采样。
+仪表盘包含守梦页和梦境页：前者用于查看运行中的进程、完成状态、日志和实验任务；后者用于保存 SSH 配置、导入 VSCode/OpenSSH 配置、测试连接、刷新快照和启动只读实时采样。
 
-SSH 探针会读取主机名、系统信息、NVIDIA GPU 指标、GPU 计算进程和远程进程列表。如果服务器没有 `nvidia-smi`，CPU 和进程监视仍然可用，页面会明确显示 GPU 指标不可用。
+SSH 探针会读取主机名、系统信息、NVIDIA GPU 指标、GPU 计算进程和远程进程列表。如果服务器没有 `nvidia-smi`，CPU 和进程状态仍然可用，页面会明确显示 GPU 指标不可用。
 
 ```bash
 dreamkeeper server import-ssh --path ~/.ssh/config
@@ -93,7 +93,7 @@ dreamkeeper monitor start --server-id <server-id> --command-filter train.py --in
 ## 项目结构
 
 ```text
-src/runrelay/       运行时、SSH/GPU 监视、SQLite 存储、仪表盘
+src/runrelay/       运行时、SSH/GPU 状态采集、SQLite 存储、仪表盘
 tests/              本地与模拟集成测试
 docs/               架构、协议和 Codex 集成文档
 plugins/runrelay/   可选 Codex Skill 与 MCP 适配器
