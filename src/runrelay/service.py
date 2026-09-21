@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import os
 import time
 import uuid
 from datetime import datetime, timezone
@@ -41,17 +40,8 @@ class RunRelayService:
         artifacts: list[str] | None = None,
         source_dir: str | None = None,
         wake_backend: str = "noop",
-        session_id: str | None = None,
-        continuation_prompt: str | None = None,
         wake_command: str | None = None,
     ) -> Experiment:
-        if wake_backend == "auto":
-            session_id = session_id or os.environ.get("CODEX_THREAD_ID") or os.environ.get(
-                "CODEX_SESSION_ID"
-            )
-            wake_backend = "codex-cli" if session_id else "noop"
-        if wake_backend == "codex-cli" and not session_id:
-            raise ValueError("codex-cli wake backend requires --session")
         if wake_backend == "command" and not wake_command:
             raise ValueError("command wake backend requires --wake-command")
         experiment_id = (
@@ -69,8 +59,6 @@ class RunRelayService:
             remote_dir=f"$HOME/.dreamkeeper/jobs/{experiment_id}" if host != "local" else None,
             artifacts=artifacts or [],
             wake_backend=wake_backend,
-            session_id=session_id,
-            continuation_prompt=continuation_prompt,
             wake_command=wake_command,
             **capture(source_dir or Path.cwd()),
         )

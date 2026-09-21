@@ -13,7 +13,7 @@ authors = [{ name = "Dreamkeeper contributors" }]
 dependencies = [
   "lark-oapi>=1.5,<2",
 ]
-keywords = ["experiments", "research", "codex", "ssh", "gpu", "agent"]
+keywords = ["experiments", "research", "ssh", "gpu", "automation"]
 classifiers = [
   "Development Status :: 3 - Alpha",
   "Intended Audience :: Developers",

@@ -17,7 +17,7 @@ one useful completion event when a run actually finishes.
 
 - **Local-first:** experiment metadata, SQLite state, SSH metadata, logs, and connector secrets stay on your machine.
 - **Server-aware:** import VSCode/OpenSSH profiles and inspect GPU metrics and processes without installing an agent on the server.
-- **Agent-friendly:** submit, list, inspect, wait for, cancel, and wake a Codex CLI session when a long-running job is complete.
+- **Automation-friendly:** submit, list, inspect, wait for, cancel, and trigger a local file or command when a long-running job is complete.
 - **Readable by default:** a dark developer-style dashboard makes active work and server health easy to scan.
 - **Connector-ready:** native Feishu/Lark notifications plus a provider-neutral JSON Webhook for Slack, Discord, Teams, n8n, Make, or custom services.
 
@@ -81,7 +81,7 @@ dreamkeeper monitor start --server-id <server-id> --command-filter train.py --in
 | QQ | Config + credential validation | Direct gateway, App ID/App Secret, discovered OpenID | App Secret is never returned to the browser |
 | WeChat | Configuration | iLink base URL, local session directory, command prefix | Session paths remain local |
 | Rokid Glasses | Configuration | Public base URL, SSE path, Agent AK/SK | AK/SK values are never returned to the browser |
-| File / command / Codex CLI | Outbound | Local scripts and agent wake-ups | Uses the local filesystem/process environment |
+| File / command | Outbound | Local scripts and automation hooks | Uses the local filesystem/process environment |
 
 Configure connectors from **`/servers` → Connectors** or through the `/api/connectors/*` endpoints. Every connector detail page includes a **Setup guide** button with prerequisites, steps, and safety notes. WeChat stores an iLink profile locally; QR binding is completed by the connector runtime. Webhook completion events are ordinary JSON:
 
@@ -89,18 +89,13 @@ Configure connectors from **`/servers` → Connectors** or through the `/api/con
 {"event":"completed","text":"守梦任务已完成...","monitor_id":"mon_xxx","server":"Training GPU"}
 ```
 
-## Codex integration
-
-Dreamkeeper includes an optional Codex Skill and MCP adapter under `plugins/runrelay`. The safe default is `noop`; automated wake-up is opt-in. Read [docs/codex-integration.md](docs/codex-integration.md) before enabling it.
-
 ## Project layout
 
 ```text
 src/runrelay/       runtime, SSH/GPU monitor, SQLite storage, dashboard
 tests/              local and simulated integration tests
-docs/               architecture, protocol, and Codex integration notes
-plugins/runrelay/   optional Codex Skill + MCP adapter
-integrations/       connector and agent integration guidance
+docs/               architecture and protocol notes
+integrations/       connector integration guidance
 ```
 
 ## Verification and security boundaries
@@ -111,7 +106,7 @@ integrations/       connector and agent integration guidance
 
 The test suite uses simulated SSH output for deterministic local checks. Real SSH authentication, remote process inspection, NVIDIA drivers, external Webhooks, and Feishu credentials remain environment-specific checks.
 
-Dreamkeeper stores SSH host metadata and local private-key **paths**, never private-key contents. It is local-first by design and does not require an OpenAI account.
+Dreamkeeper stores SSH host metadata and local private-key **paths**, never private-key contents. It is local-first by design and does not require an external AI account.
 
 ## Contributing and license
 

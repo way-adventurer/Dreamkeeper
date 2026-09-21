@@ -67,37 +67,6 @@ class CommandWake:
         return result.stdout.strip() or "Wake command completed."
 
 
-class CodexCliResumeWake:
-    name = "codex-cli"
-
-    def wake(self, experiment: Experiment) -> str:
-        if not experiment.session_id:
-            raise RuntimeError("codex-cli wake backend requires session_id")
-        prompt = experiment.continuation_prompt or (
-            f"Dreamkeeper experiment {experiment.id} finished.\n"
-            f"Status: {experiment.status.value}; exit code: {experiment.exit_code}.\n"
-            f"Host: {experiment.host}; workdir: {experiment.workdir}.\n"
-            f"Local Dreamkeeper state and logs: {experiment.local_dir}.\n"
-            "Inspect the experiment status, logs, and declared artifacts, then continue the plan."
-        )
-        result = subprocess.run(
-            ["codex", "exec", "resume", experiment.session_id, prompt, "--json"],
-            cwd=experiment.git_repo or None,
-            text=True,
-            capture_output=True,
-            check=False,
-        )
-        Path(experiment.local_dir).mkdir(parents=True, exist_ok=True)
-        (Path(experiment.local_dir) / "codex-wake.jsonl").write_text(
-            result.stdout, encoding="utf-8"
-        )
-        if result.returncode:
-            raise RuntimeError(
-                result.stderr.strip() or f"codex exec resume exited with {result.returncode}"
-            )
-        return "Codex CLI resume completed."
-
-
 def make_wake_backend(experiment: Experiment) -> WakeBackend:
     if experiment.wake_backend == "noop":
         return NoopWake()
@@ -105,6 +74,8 @@ def make_wake_backend(experiment: Experiment) -> WakeBackend:
         return FileWake()
     if experiment.wake_backend == "command":
         return CommandWake()
-    if experiment.wake_backend == "codex-cli":
-        return CodexCliResumeWake()
+    # Treat the old experimental value as a no-op so existing state files
+    # remain readable after the unsupported integration was removed.
+    if experiment.wake_backend == "auto":
+        return NoopWake()
     raise ValueError(f"Unknown wake backend: {experiment.wake_backend}")

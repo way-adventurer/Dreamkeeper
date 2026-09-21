@@ -43,4 +43,4 @@ unattended monitor.
 
 ## Why wait is a first-class operation
 
-dreamkeeper wait is intentionally a blocking local process. It can wait for hours without making model requests. A Codex tool call may still have host-side timeout limits, so the CLI also supports detached monitoring through daemon run and later inspection through status/logs.
+dreamkeeper wait is intentionally a blocking local process. It can wait for hours without making external model requests. The CLI also supports detached monitoring through daemon run and later inspection through status/logs.

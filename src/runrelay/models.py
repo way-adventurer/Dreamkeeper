@@ -161,8 +161,6 @@ class Experiment:
     wake_backend: str = "noop"
     wake_status: str = "PENDING"
     wake_detail: str | None = None
-    session_id: str | None = None
-    continuation_prompt: str | None = None
     wake_command: str | None = None
     last_error: str | None = None
     monitor_pid: int | None = None
@@ -178,4 +176,5 @@ class Experiment:
         value = dict(value)
         value["status"] = Status(value["status"])
         value.setdefault("artifacts", [])
-        return cls(**value)
+        allowed = {item.name for item in fields(cls)}
+        return cls(**{key: item for key, item in value.items() if key in allowed})

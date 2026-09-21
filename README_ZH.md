@@ -15,7 +15,7 @@ Dreamkeeper（守梦）是一个本地优先的 AI 与 GPU 实验守候台。它
 
 - **本地优先：** 实验元数据、SQLite 状态、SSH 信息、日志和连接器密钥都保存在本机。
 - **服务器感知：** 可导入 VSCode/OpenSSH 配置，查看 GPU 显存、利用率、温度、功耗和 GPU 进程，不需要在服务器上安装守护程序。
-- **适合 Agent：** 支持提交、列表、状态、日志、等待、取消实验，并可在完成时唤醒 Codex CLI。
+- **便于自动化：** 支持提交、列表、状态、日志、等待、取消实验，并可在完成时触发本地文件或命令。
 - **清晰的开发者界面：** 深色控制台风格，方便快速判断实验和服务器是否正常。
 - **连接器友好：** 原生支持飞书/Lark，同时提供可接入 Slack、Discord、Teams、n8n、Make 或自建服务的通用 Webhook。
 
@@ -78,7 +78,7 @@ dreamkeeper monitor start --server-id <server-id> --command-filter train.py --in
 | QQ | 配置 + 凭据校验 | Gateway 直连、App ID/App Secret、自动发现 OpenID | App Secret 不返回浏览器 |
 | 微信 | 配置 | iLink 地址、本地会话目录和命令前缀 | 本地会话路径保存在本机 |
 | Rokid Glasses | 配置 | 公网地址、SSE 路径、Agent AK/SK | AK/SK 不返回浏览器 |
-| 文件 / 命令 / Codex CLI | 出站 | 本地脚本和 Agent 唤醒 | 使用本地文件系统和进程环境 |
+| 文件 / 命令 | 出站 | 本地脚本和自动化钩子 | 使用本地文件系统和进程环境 |
 
 可在 **`/servers` → 连接器** 中配置，也可以调用 `/api/connectors/*` 接口。每个连接器详情页都提供 **配置教程** 按钮，展示准备事项、配置步骤和安全提示。微信页面保存 iLink 配置和本地会话目录，二维码绑定由连接器运行时完成。Webhook 完成事件使用普通 JSON：
 
@@ -86,18 +86,13 @@ dreamkeeper monitor start --server-id <server-id> --command-filter train.py --in
 {"event":"completed","text":"守梦任务已完成...","monitor_id":"mon_xxx","server":"Training GPU"}
 ```
 
-## Codex 集成
-
-项目在 `plugins/runrelay` 中提供可选的 Codex Skill 和 MCP 适配器。默认后端是安全的 `noop`，自动唤醒需要显式启用。启用前请阅读 [docs/codex-integration.md](docs/codex-integration.md)。
-
 ## 项目结构
 
 ```text
 src/runrelay/       运行时、SSH/GPU 状态采集、SQLite 存储、仪表盘
 tests/              本地与模拟集成测试
-docs/               架构、协议和 Codex 集成文档
-plugins/runrelay/   可选 Codex Skill 与 MCP 适配器
-integrations/       连接器和 Agent 集成说明
+docs/               架构和协议文档
+integrations/       连接器集成说明
 ```
 
 ## 验证与安全边界
@@ -108,7 +103,7 @@ integrations/       连接器和 Agent 集成说明
 
 测试使用模拟 SSH 输出进行确定性的本地验证。真实 SSH 认证、远程进程检查、NVIDIA 驱动、外部 Webhook 以及飞书凭据仍需要在你的环境中单独验证。
 
-守梦只保存 SSH 主机元数据和本地私钥**路径**，不会读取或保存私钥内容；项目本地优先运行，不要求 OpenAI 账号。
+守梦只保存 SSH 主机元数据和本地私钥**路径**，不会读取或保存私钥内容；项目本地优先运行，不要求外部 AI 账号。
 
 ## 贡献与许可证
 

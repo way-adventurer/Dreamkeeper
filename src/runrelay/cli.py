@@ -28,11 +28,9 @@ def build_parser() -> argparse.ArgumentParser:
     submit.add_argument("--source-dir")
     submit.add_argument(
         "--wake-backend",
-        choices=["noop", "auto", "file", "command", "codex-cli"],
+        choices=["noop", "file", "command"],
         default="noop",
     )
-    submit.add_argument("--session", dest="session_id")
-    submit.add_argument("--continuation-prompt")
     submit.add_argument("--wake-command")
 
     list_parser = sub.add_parser("list", help="List experiments")
@@ -116,8 +114,6 @@ def main(argv: list[str] | None = None) -> None:
                 artifacts=args.artifact,
                 source_dir=args.source_dir,
                 wake_backend=args.wake_backend,
-                session_id=args.session_id,
-                continuation_prompt=args.continuation_prompt,
                 wake_command=args.wake_command,
             )
             print(
