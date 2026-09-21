@@ -28,7 +28,7 @@ dreamkeeper list
 dreamkeeper ui --host 127.0.0.1 --port 8765
 ```
 
-打开 <http://127.0.0.1:8765>。守梦首页是 `/`，SSH 梦境配置和传音位于 `/servers`。
+打开 <http://127.0.0.1:8765>。守梦首页是 `/`，SSH 梦境、VSCode 导入和传音配置位于 `/servers`。
 
 ### Windows 桌面版
 
@@ -54,11 +54,11 @@ dreamkeeper wait <experiment-id>
 dreamkeeper logs <experiment-id>
 ```
 
-## 仪表盘与梦境状态
+## 守梦首页与服务器动态
 
-仪表盘包含守梦页和梦境页：前者用于查看运行中的进程、完成状态、日志和实验任务；后者用于保存 SSH 配置、导入 VSCode/OpenSSH 配置、测试连接、刷新快照和启动只读实时采样。
+首页是 **守梦任务** 的安静工作区：可以查看运行中的任务、完成状态、日志和实验记录，不必一直守在终端或浏览器标签页前。梦境页用于保存 SSH 配置、导入 VSCode/OpenSSH 配置、测试连接、刷新快照和启动只读实时采样。
 
-SSH 探针会读取主机名、系统信息、NVIDIA GPU 指标、GPU 计算进程和远程进程列表。如果服务器没有 `nvidia-smi`，CPU 和进程状态仍然可用，页面会明确显示 GPU 指标不可用。
+SSH 探针会读取主机名、系统信息、NVIDIA GPU 指标、GPU 计算进程和远程进程列表。首页的 **梦境动态** 会按服务器分组显示当前 GPU 进程，每个进程右侧都有 **添加守梦任务** 按钮，可以直接用该 PID 建立守梦任务。顶部 PID 输入框支持直接粘贴带有其它文字的内容，守梦会自动提取其中的数字 PID。若服务器没有 `nvidia-smi`，CPU 和进程状态仍然可用，页面会明确显示 GPU 指标不可用。
 
 ```bash
 dreamkeeper server import-ssh --path ~/.ssh/config

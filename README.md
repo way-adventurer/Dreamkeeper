@@ -30,7 +30,7 @@ dreamkeeper list
 dreamkeeper ui --host 127.0.0.1 --port 8765
 ```
 
-Open <http://127.0.0.1:8765>. The monitor is available at `/`; SSH profiles and connectors are managed at `/servers`.
+Open <http://127.0.0.1:8765>. The Dreamkeeper home is available at `/`; SSH dreams, VSCode import, and message channels are managed at `/servers`.
 
 ### Windows desktop build
 
@@ -57,11 +57,11 @@ dreamkeeper wait <experiment-id>
 dreamkeeper logs <experiment-id>
 ```
 
-## Dashboard and server monitoring
+## Dreamkeeper home and server activity
 
-The dashboard provides a monitor page for active processes, completion state, logs, and experiment jobs, plus a server page for SSH profiles, VSCode/OpenSSH import, connection tests, snapshots, and read-only live sampling.
+The home page is the quiet place for **Dream tasks**. It lists active tasks, completion state, logs, and experiment records without requiring a terminal tab to stay open. The server page manages SSH dreams, VSCode/OpenSSH import, connection tests, snapshots, and read-only live sampling.
 
-The SSH probe collects hostname, system information, NVIDIA GPU metrics, GPU compute processes, and the remote process list. If `nvidia-smi` is unavailable, CPU/process monitoring still works and the missing capability is reported clearly.
+The SSH probe collects hostname, system information, NVIDIA GPU metrics, GPU compute processes, and the remote process list. On the home page, **Dream activity** is grouped by server so you can see each GPU process and click **Add dream task** beside a PID. The PID field also accepts pasted text and keeps the numeric PID automatically. If `nvidia-smi` is unavailable, CPU/process information still works and the missing capability is reported clearly.
 
 ```bash
 dreamkeeper server import-ssh --path ~/.ssh/config
