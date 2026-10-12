@@ -5,7 +5,7 @@ import sqlite3
 from pathlib import Path
 from typing import Iterable
 
-from .models import Experiment, ProcessMonitor, ServerProfile, ServerSnapshot, Status
+from .models import Experiment, ProcessMonitor, ServerProfile, ServerSnapshot, Status, WatchGroup
 
 
 class Storage:
@@ -59,6 +59,13 @@ class Storage:
                     created_at TEXT NOT NULL
                 )
                 """
+            )
+            connection.execute(
+                """CREATE TABLE IF NOT EXISTS watch_groups (
+                    id TEXT PRIMARY KEY,
+                    payload TEXT NOT NULL,
+                    created_at TEXT NOT NULL
+                )"""
             )
 
     def put(self, experiment: Experiment) -> None:
@@ -151,3 +158,25 @@ class Storage:
         with self._connect() as connection:
             rows = connection.execute(query).fetchall()
         return [ProcessMonitor.from_dict(json.loads(row["payload"])) for row in rows]
+
+    def put_watch_group(self, group: WatchGroup) -> None:
+        with self._connect() as connection:
+            connection.execute(
+                """INSERT INTO watch_groups (id, payload, created_at) VALUES (?, ?, ?)
+                ON CONFLICT(id) DO UPDATE SET payload=excluded.payload""",
+                (group.id, json.dumps(group.to_dict(), ensure_ascii=False), group.created_at),
+            )
+
+    def get_watch_group(self, group_id: str) -> WatchGroup | None:
+        with self._connect() as connection:
+            row = connection.execute("SELECT payload FROM watch_groups WHERE id = ?", (group_id,)).fetchone()
+        return WatchGroup.from_dict(json.loads(row["payload"])) if row else None
+
+    def list_watch_groups(self) -> list[WatchGroup]:
+        with self._connect() as connection:
+            rows = connection.execute("SELECT payload FROM watch_groups ORDER BY created_at DESC").fetchall()
+        return [WatchGroup.from_dict(json.loads(row["payload"])) for row in rows]
+
+    def delete_watch_group(self, group_id: str) -> None:
+        with self._connect() as connection:
+            connection.execute("DELETE FROM watch_groups WHERE id = ?", (group_id,))

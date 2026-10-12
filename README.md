@@ -63,6 +63,10 @@ The home page is the quiet place for **Dream tasks**. It lists active tasks, com
 
 The SSH probe collects hostname, system information, NVIDIA GPU metrics, GPU compute processes, and the remote process list. On the home page, **Dream activity** is grouped by server so you can see each GPU process and click **Add dream task** beside a PID. The PID field also accepts pasted text and keeps the numeric PID automatically. If `nvidia-smi` is unavailable, CPU/process information still works and the missing capability is reported clearly.
 
+For a multi-GPU experiment, click **New group watch** on the home page, drag at least two active process cards into the group, then click **Start watch**. The group sends one completion message only after every included process has ended. Double-click a group or process name to rename it. A group remains a draft until you start it; its membership is locked once watching begins. If a member is manually stopped, the group is cancelled instead of reporting a successful experiment completion.
+
+GPU cards expand independently. Their open/closed states and the current page survive automatic refreshes and reloads within the same browser tab. The sidebar highlights only the page you are viewing.
+
 ```bash
 dreamkeeper server import-ssh --path ~/.ssh/config
 dreamkeeper server list

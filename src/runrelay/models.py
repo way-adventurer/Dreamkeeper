@@ -124,6 +124,8 @@ class ProcessMonitor:
     summary: dict[str, Any] = field(default_factory=dict)
     last_error: str | None = None
     log_path: str | None = None
+    name: str | None = None
+    group_id: str | None = None
 
     def to_dict(self) -> dict[str, Any]:
         result = dict(self.__dict__)
@@ -136,6 +138,25 @@ class ProcessMonitor:
         value = {key: item for key, item in dict(value).items() if key in allowed}
         value.setdefault("summary", {})
         return cls(**value)
+
+
+@dataclass
+class WatchGroup:
+    id: str
+    name: str
+    status: str = "DRAFT"
+    created_at: str = ""
+    started_at: str | None = None
+    ended_at: str | None = None
+    notification_status: str | None = None
+
+    def to_dict(self) -> dict[str, Any]:
+        return dict(self.__dict__)
+
+    @classmethod
+    def from_dict(cls, value: dict[str, Any]) -> "WatchGroup":
+        allowed = {item.name for item in fields(cls)}
+        return cls(**{key: item for key, item in value.items() if key in allowed})
 
 
 @dataclass

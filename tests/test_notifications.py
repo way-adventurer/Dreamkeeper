@@ -1,6 +1,6 @@
 from pathlib import Path
 
-from runrelay.models import ProcessMonitor, ServerProfile
+from runrelay.models import ProcessMonitor, ServerProfile, WatchGroup
 from runrelay.notifications import FeishuCliNotifier, _FeishuEventHandler
 
 
@@ -63,6 +63,25 @@ def test_webhook_connector_can_notify_without_feishu(tmp_path: Path):
     assert notifier.public_webhook_config() == {
         "enabled": True, "url": "https://hooks.example.test/dreamkeeper", "secret_set": False,
     }
+
+
+def test_group_completion_webhook_contains_all_processes(tmp_path: Path):
+    notifier = FeishuCliNotifier(tmp_path)
+    notifier.save_webhook_config({"enabled": True, "url": "https://hooks.example.test/dreamkeeper"})
+    delivered = []
+    notifier._send_webhook = lambda config, payload: delivered.append(payload) or {"ok": True}
+    group = WatchGroup(id="grp_test", name="双卡训练", status="COMPLETED", ended_at="2026-09-28T00:00:00+00:00")
+    members = [ProcessMonitor(id="mon_1", server_id="srv_test", pid=101, name="GPU 0"),
+               ProcessMonitor(id="mon_2", server_id="srv_test", pid=202, name="GPU 1")]
+    profile = ServerProfile(id="srv_test", name="gpu-test", host="gpu.example.test")
+
+    notifier.notify_group_completed(group, members, {profile.id: profile})
+
+    assert len(delivered) == 1
+    assert delivered[0]["event"] == "group_completed"
+    assert delivered[0]["monitor_ids"] == ["mon_1", "mon_2"]
+    assert "PID 101" in delivered[0]["text"]
+    assert "PID 202" in delivered[0]["text"]
 
 
 def test_feishu_connector_can_discover_current_user(tmp_path: Path):

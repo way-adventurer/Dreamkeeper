@@ -15,7 +15,7 @@ from typing import Any, Callable
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 
-from .models import ProcessMonitor, ServerProfile
+from .models import ProcessMonitor, ServerProfile, WatchGroup
 
 
 class FeishuNotificationError(RuntimeError):
@@ -545,6 +545,24 @@ class FeishuNotifier:
         result = self._send(config, text, monitor.id) if config.enabled else None
         if webhook.enabled:
             result = {"feishu": result, "webhook": self._send_webhook(webhook, {"event": "completed", "text": text, "monitor_id": monitor.id, "server": profile.name})}
+        return result
+
+    def notify_group_completed(self, group: WatchGroup, monitors: list[ProcessMonitor], profiles: dict[str, ServerProfile]) -> dict[str, object] | None:
+        config = self.get_config()
+        webhook = self.get_webhook_config()
+        if not config.enabled and not webhook.enabled:
+            return None
+        lines = [f"组合守梦已完成：{group.name}", f"进程：{len(monitors)} 个", f"结束时间：{group.ended_at or '—'}"]
+        for monitor in monitors:
+            profile = profiles.get(monitor.server_id)
+            lines.append(f"- {profile.name if profile else monitor.server_id} · PID {monitor.pid or '—'} · {monitor.name or '进程'}")
+        message = "\n".join(lines)
+        result = self._send(config, message, group.id) if config.enabled else None
+        if webhook.enabled:
+            result = {"feishu": result, "webhook": self._send_webhook(webhook, {
+                "event": "group_completed", "text": message, "group_id": group.id,
+                "group_name": group.name, "monitor_ids": [monitor.id for monitor in monitors],
+            })}
         return result
 
     def _send_webhook(self, config: WebhookConfig, payload: dict[str, object]) -> dict[str, object]:

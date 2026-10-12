@@ -10,7 +10,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Callable
 
-from .models import GPUSnapshot, ProcessMonitor, ProcessSnapshot, ServerProfile, ServerSnapshot
+from .models import GPUSnapshot, ProcessMonitor, ProcessSnapshot, ServerProfile, ServerSnapshot, WatchGroup
 from .monitor import ensure_daemon
 from .notifications import FeishuCliNotifier, FeishuNotificationError, WebhookNotificationError
 from .storage import Storage
@@ -250,6 +250,110 @@ class ServerMonitorService:
         self._write_log(monitor, f"started {monitor.started_at}; target_count={len(targets)}")
         return monitor
 
+    def create_watch_group(self, name: str = "") -> WatchGroup:
+        group = WatchGroup(id=f"grp_{uuid.uuid4().hex[:10]}", name=name.strip() or "新的组合守梦", created_at=now())
+        self.storage.put_watch_group(group)
+        return group
+
+    def rename_watch_group(self, group_id: str, name: str) -> WatchGroup:
+        group = self._watch_group(group_id)
+        if not name.strip():
+            raise ValueError("实验名称不能为空")
+        group.name = name.strip()[:100]
+        self.storage.put_watch_group(group)
+        return group
+
+    def rename_monitor(self, monitor_id: str, name: str) -> ProcessMonitor:
+        monitor = self._monitor(monitor_id)
+        if not name.strip():
+            raise ValueError("进程名称不能为空")
+        monitor.name = name.strip()[:100]
+        self.storage.put_monitor(monitor)
+        return monitor
+
+    def add_monitor_to_group(self, group_id: str, monitor_id: str) -> ProcessMonitor:
+        group = self._watch_group(group_id)
+        if group.status != "DRAFT":
+            raise ValueError("已开始守梦的实验不能再修改进程")
+        monitor = self._monitor(monitor_id)
+        if monitor.status != "RUNNING":
+            raise ValueError("只能添加仍在运行的进程")
+        if monitor.group_id and monitor.group_id != group_id:
+            old_group = self.storage.get_watch_group(monitor.group_id)
+            if old_group and old_group.status != "DRAFT":
+                raise ValueError("该进程已属于运行中的组合守梦")
+        monitor.group_id = group_id
+        self.storage.put_monitor(monitor)
+        return monitor
+
+    def remove_monitor_from_group(self, group_id: str, monitor_id: str) -> ProcessMonitor:
+        group = self._watch_group(group_id)
+        if group.status != "DRAFT":
+            raise ValueError("已开始守梦的实验不能再移除进程")
+        monitor = self._monitor(monitor_id)
+        if monitor.group_id != group_id:
+            raise ValueError("进程不属于此实验")
+        monitor.group_id = None
+        self.storage.put_monitor(monitor)
+        return monitor
+
+    def start_watch_group(self, group_id: str) -> WatchGroup:
+        group = self._watch_group(group_id)
+        if group.status != "DRAFT":
+            raise ValueError("该实验已开始守梦")
+        members = self._group_members(group_id)
+        if len(members) < 2:
+            raise ValueError("至少拖入两个进程才能开始组合守梦")
+        if not any(member.status == "RUNNING" for member in members):
+            raise ValueError("至少需要一个仍在运行的进程")
+        if any(member.status not in ("RUNNING", "COMPLETED") for member in members):
+            raise ValueError("包含已取消的进程，请先移除")
+        group.status, group.started_at = "RUNNING", now()
+        self.storage.put_watch_group(group)
+        return group
+
+    def delete_watch_group(self, group_id: str) -> None:
+        group = self._watch_group(group_id)
+        if group.status != "DRAFT":
+            raise ValueError("只能删除尚未开始的组合守梦")
+        for monitor in self._group_members(group_id):
+            monitor.group_id = None
+            self.storage.put_monitor(monitor)
+        self.storage.delete_watch_group(group_id)
+
+    def _watch_group(self, group_id: str) -> WatchGroup:
+        group = self.storage.get_watch_group(group_id)
+        if group is None:
+            raise KeyError(f"Unknown group: {group_id}")
+        return group
+
+    def _group_members(self, group_id: str) -> list[ProcessMonitor]:
+        return [monitor for monitor in self.storage.list_monitors() if monitor.group_id == group_id]
+
+    def _reconcile_watch_group(self, group_id: str) -> None:
+        group = self._watch_group(group_id)
+        if group.status != "RUNNING":
+            return
+        members = self._group_members(group_id)
+        if not members or any(member.status == "RUNNING" for member in members):
+            return
+        group.ended_at = now()
+        group.status = "COMPLETED" if all(member.status == "COMPLETED" for member in members) else "CANCELLED"
+        group.notification_status = "PENDING" if group.status == "COMPLETED" else "SKIPPED"
+        self.storage.put_watch_group(group)
+        if group.status != "COMPLETED":
+            return
+        try:
+            profiles = {member.server_id: profile for member in members
+                        if (profile := self.storage.get_server(member.server_id)) is not None}
+            result = self.notifier.notify_group_completed(group, members, profiles)
+            group.notification_status = "SENT" if result is not None else "DISABLED"
+        except (FeishuNotificationError, WebhookNotificationError) as exc:
+            group.notification_status = "FAILED"
+            for member in members:
+                self._write_log(member, f"Group connector notification failed: {exc}")
+        self.storage.put_watch_group(group)
+
     def refresh_monitor(self, monitor_id: str) -> ProcessMonitor:
         monitor = self._monitor(monitor_id)
         if monitor.status != "RUNNING":
@@ -259,10 +363,17 @@ class ServerMonitorService:
             snapshot = self.collect(profile)
             self.storage.put_snapshot(snapshot)
         except ServerMonitorError as exc:
+            latest = self.storage.get_monitor(monitor_id)
+            if latest:
+                monitor.name, monitor.group_id = latest.name, latest.group_id
             monitor.last_error = str(exc)
             self.storage.put_monitor(monitor)
             self._write_log(monitor, f"poll failed: {exc}")
             return monitor
+        # The user may have renamed or grouped this monitor while the SSH probe ran.
+        latest = self.storage.get_monitor(monitor_id)
+        if latest:
+            monitor.name, monitor.group_id = latest.name, latest.group_id
         targets = matching_processes(snapshot.processes, monitor.pid, monitor.command_filter, monitor.user_filter)
         if targets:
             monitor.last_seen_at = now()
@@ -276,12 +387,15 @@ class ServerMonitorService:
             monitor.summary["stderr_tail"] = self._tail(profile, monitor.stderr_path)
             monitor.last_error = None
             self._write_log(monitor, f"completed {monitor.ended_at}; target process ended")
-            try:
-                self.notifier.notify_completed(monitor, profile)
-            except (FeishuNotificationError, WebhookNotificationError) as exc:
-                # Completion must remain recorded even if an optional notification fails.
-                self._write_log(monitor, f"Connector notification failed: {exc}")
+            if not monitor.group_id:
+                try:
+                    self.notifier.notify_completed(monitor, profile)
+                except (FeishuNotificationError, WebhookNotificationError) as exc:
+                    # Completion must remain recorded even if an optional notification fails.
+                    self._write_log(monitor, f"Connector notification failed: {exc}")
         self.storage.put_monitor(monitor)
+        if monitor.group_id and monitor.status == "COMPLETED":
+            self._reconcile_watch_group(monitor.group_id)
         return monitor
 
     def stop_monitor(self, monitor_id: str) -> ProcessMonitor:
@@ -290,6 +404,8 @@ class ServerMonitorService:
             monitor.status, monitor.ended_at = "CANCELLED", now()
             self._write_log(monitor, f"cancelled {monitor.ended_at}")
             self.storage.put_monitor(monitor)
+            if monitor.group_id:
+                self._reconcile_watch_group(monitor.group_id)
         return monitor
 
     def _tail(self, profile: ServerProfile, path: str | None) -> str:

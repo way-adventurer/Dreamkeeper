@@ -29,3 +29,14 @@ def test_home_has_pasteable_pid_and_per_server_gpu_quick_add():
     assert "data-add-dream-pid" in page
     assert "clipboardData" in page
     assert "replace(/\\D/g,'')" in page
+
+
+def test_home_has_group_watch_drag_and_inline_rename():
+    page = _monitor_page_v2().decode("utf-8")
+    assert "新增组合守梦" in page
+    assert "data-drag-monitor" in page
+    assert "data-drop-group" in page
+    assert "data-rename-monitor" in page
+    assert "data-rename-group" in page
+    assert "watch-rename-input" in page
+    assert "/api/watch-groups" in page
