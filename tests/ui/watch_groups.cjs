@@ -42,6 +42,13 @@ test('whole process card drags into a named group; group picker and rename work'
     } else if (pathName === '/api/watch-groups/g1/monitors') {
       data = monitors.find(m => m.id === request.postDataJSON().monitor_id);
       data.group_id = 'g1';
+    } else if (pathName === '/api/watch-groups/g1/start') {
+      data = groups[0];
+      data.status = 'RUNNING';
+    } else if (pathName === '/api/watch-groups/g1/cancel') {
+      data = groups[0];
+      data.status = 'CANCELLED';
+      monitors.forEach(m => { if (m.group_id === 'g1') m.status = 'CANCELLED'; });
     } else if (pathName === '/api/monitors/m1/rename') {
       data = monitors[0];
       data.name = request.postDataJSON().name;
@@ -69,6 +76,11 @@ test('whole process card drags into a named group; group picker and rename work'
   await page.locator('#monitor-msg.toast-in').waitFor();
   await page.waitForTimeout(3600);
   assert.equal(await page.locator('#monitor-msg').textContent(), '');
+  await page.locator('[data-start-group="g1"]').click();
+  await page.locator('[data-cancel-group="g1"]').click();
+  await page.locator('.watch-group[data-group-status="CANCELLED"]').waitFor();
+  assert.equal(await page.locator('[data-cancel-group="g1"]').count(), 0);
+  assert.equal(monitors.filter(m => m.status === 'CANCELLED').length, 2);
 });
 
 test('connector routing selection stays readable and header keeps only language switch', async t => {

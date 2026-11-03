@@ -318,6 +318,17 @@ class ServerMonitorService:
         self.storage.put_watch_group(group)
         return group
 
+    def cancel_watch_group(self, group_id: str) -> WatchGroup:
+        group = self._watch_group(group_id)
+        if group.status != "RUNNING":
+            raise ValueError("只能取消守梦中的组合")
+        group.status, group.ended_at = "CANCELLED", now()
+        group.notification_status = "SKIPPED"
+        self.storage.put_watch_group(group)
+        for monitor in self._group_members(group_id):
+            self.stop_monitor(monitor.id)
+        return group
+
     def delete_watch_group(self, group_id: str) -> None:
         group = self._watch_group(group_id)
         if group.status != "DRAFT":
@@ -371,6 +382,8 @@ class ServerMonitorService:
         except ServerMonitorError as exc:
             latest = self.storage.get_monitor(monitor_id)
             if latest:
+                if latest.status != "RUNNING":
+                    return latest
                 monitor.name, monitor.group_id = latest.name, latest.group_id
             monitor.last_error = str(exc)
             self.storage.put_monitor(monitor)
@@ -379,6 +392,8 @@ class ServerMonitorService:
         # The user may have renamed or grouped this monitor while the SSH probe ran.
         latest = self.storage.get_monitor(monitor_id)
         if latest:
+            if latest.status != "RUNNING":
+                return latest
             monitor.name, monitor.group_id = latest.name, latest.group_id
         targets = matching_processes(snapshot.processes, monitor.pid, monitor.command_filter, monitor.user_filter)
         if targets:

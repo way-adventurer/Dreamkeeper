@@ -87,3 +87,27 @@ def test_draft_requires_two_processes_and_cancelled_member_prevents_success(tmp_
     assert storage.get_watch_group(group.id).status == "CANCELLED"
     assert notifier.individual == []
     assert notifier.groups == []
+
+
+def test_cancel_running_group_stops_watching_without_completion_notice(tmp_path, monkeypatch):
+    service, storage, notifier, profile = make_service(
+        tmp_path, monkeypatch, [probe_output(101, 202), probe_output(101, 202)],
+    )
+    first = service.start_monitor(server_id=profile.id, pid=101)
+    second = service.start_monitor(server_id=profile.id, pid=202)
+    group = service.create_watch_group("双卡训练")
+    service.add_monitor_to_group(group.id, first.id)
+    service.add_monitor_to_group(group.id, second.id)
+    with pytest.raises(ValueError, match="守梦中"):
+        service.cancel_watch_group(group.id)
+    service.start_watch_group(group.id)
+
+    cancelled = service.cancel_watch_group(group.id)
+    assert cancelled.status == "CANCELLED"
+    assert cancelled.ended_at
+    assert cancelled.notification_status == "SKIPPED"
+    assert all(storage.get_monitor(m.id).status == "CANCELLED" for m in (first, second))
+    assert notifier.individual == []
+    assert notifier.groups == []
+    with pytest.raises(ValueError, match="守梦中"):
+        service.cancel_watch_group(group.id)

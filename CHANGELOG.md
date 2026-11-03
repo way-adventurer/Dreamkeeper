@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.2.1 - 2026-11-03
+
+- Let users cancel a running group watch without stopping remote processes or sending a completion notice.
+
 ## 0.2.0 - 2026-11-03
 
 - Reopen the dashboard on every Windows launcher click, including when it is already running.

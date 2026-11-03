@@ -40,6 +40,8 @@ def test_home_has_group_watch_drag_and_inline_rename():
     assert "data-rename-group" in page
     assert "watch-rename-input" in page
     assert "/api/watch-groups" in page
+    assert "data-cancel-group" in page
+    assert "cancelWatch:'取消守梦'" in page
 
 
 def test_settings_can_import_browser_selected_ssh_config():
