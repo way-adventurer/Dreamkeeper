@@ -1,7 +1,11 @@
 import subprocess
+from pathlib import Path
+from unittest.mock import patch
+
+import pytest
 
 from runrelay.models import ServerProfile
-from runrelay.server_monitor import SSHProbe, ServerMonitorService, parse_probe, parse_ssh_config
+from runrelay.server_monitor import SSHProbe, ServerMonitorService, parse_probe, parse_ssh_config, parse_ssh_config_text
 from runrelay.storage import Storage
 
 
@@ -120,6 +124,18 @@ def test_import_ssh_config_parses_vscode_remote_ssh_fields(tmp_path):
     assert imported[0].name == "gpu-134"
     assert imported[0].host == "192.0.2.134"
     assert imported[0].remote_forwards == ["7897 127.0.0.1:7897"]
+
+
+def test_ssh_import_accepts_browser_read_text_when_server_cannot_read_path(tmp_path):
+    text = "Host gpu-test\n  HostName 192.0.2.10\n  User researcher\n"
+    storage = Storage(tmp_path / "state")
+    service = ServerMonitorService(tmp_path / "state", storage)
+    with patch.object(Path, "stat", side_effect=PermissionError("access denied")):
+        with pytest.raises(ValueError, match="access denied"):
+            parse_ssh_config(tmp_path / "config")
+    assert parse_ssh_config_text(text)[0]["host"] == "192.0.2.10"
+    imported = service.import_ssh_config_text(text)
+    assert imported[0].host == "192.0.2.10"
 
 
 def test_ssh_probe_normalizes_windows_newlines_before_remote_bash():

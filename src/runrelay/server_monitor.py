@@ -135,8 +135,14 @@ class ServerMonitorService:
         return profile
 
     def import_ssh_config(self, path: str | Path) -> list[ServerProfile]:
+        return self._import_ssh_items(parse_ssh_config(path))
+
+    def import_ssh_config_text(self, text: str) -> list[ServerProfile]:
+        return self._import_ssh_items(parse_ssh_config_text(text))
+
+    def _import_ssh_items(self, items: list[dict[str, object]]) -> list[ServerProfile]:
         profiles = []
-        for item in parse_ssh_config(path):
+        for item in items:
             profiles.append(self.save_server(
                 server_id=None, name=str(item["name"]), host=str(item["host"]),
                 port=int(item["port"]), username=item.get("username"),
@@ -510,14 +516,29 @@ ps -eo pid=,user=,stat=,etimes=,args= 2>/dev/null | while read -r pid user stat 
 def parse_ssh_config(path: str | Path) -> list[dict[str, object]]:
     """Parse importable Host blocks without storing the source or key contents."""
     config_path = Path(path).expanduser()
+    try:
+        size = config_path.stat().st_size
+    except FileNotFoundError as exc:
+        raise ValueError(f"SSH config file not found: {config_path}") from exc
+    except PermissionError as exc:
+        raise ValueError(f"SSH config access denied: {config_path}") from exc
     if not config_path.is_file():
-        raise ValueError(f"SSH config file not found: {config_path}")
-    if config_path.stat().st_size > 1_000_000:
+        raise ValueError(f"SSH config is not a file: {config_path}")
+    if size > 1_000_000:
         raise ValueError("SSH config file is larger than 1 MiB")
     try:
-        lines = config_path.read_text(encoding="utf-8").splitlines()
+        text = config_path.read_text(encoding="utf-8")
     except UnicodeDecodeError as exc:
         raise ValueError("SSH config must be UTF-8 text") from exc
+    except PermissionError as exc:
+        raise ValueError(f"SSH config access denied: {config_path}") from exc
+    return parse_ssh_config_text(text)
+
+
+def parse_ssh_config_text(text: str) -> list[dict[str, object]]:
+    if len(text.encode("utf-8")) > 1_000_000:
+        raise ValueError("SSH config file is larger than 1 MiB")
+    lines = text.splitlines()
 
     imported: list[dict[str, object]] = []
     aliases: list[str] = []

@@ -29,20 +29,30 @@ def main() -> None:
     port = int(os.environ.get("DREAMKEEPER_PORT", "8765"))
     url = f"http://{host}:{port}"
 
-    # A second double-click should reuse the running dashboard instead of
-    # opening another server/browser instance.
+    # Reuse the running server, but still open its page on every double-click.
     try:
         with urlopen(url, timeout=0.35):  # noqa: S310
-            return
+            pass
     except Exception:
         pass
+    else:
+        webbrowser.open(url)
+        return
 
     service = RunRelayService(state_dir())
 
-    # Start the browser just after the HTTP listener begins accepting requests.
+    # Open the page once the HTTP listener accepts requests. Startup time varies
+    # on slower Windows machines and with a cold PyInstaller extraction.
     def open_dashboard() -> None:
-        time.sleep(0.8)
-        webbrowser.open(url)
+        for _ in range(40):
+            try:
+                with urlopen(url, timeout=0.35):  # noqa: S310
+                    pass
+            except Exception:
+                time.sleep(0.25)
+            else:
+                webbrowser.open(url)
+                return
 
     threading.Thread(target=open_dashboard, daemon=True).start()
     serve(service, host, port)

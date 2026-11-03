@@ -42,15 +42,14 @@ async function dashboard(t) {
 
 const openCards = page => page.locator('details.dream-overview-card[open] h3').allTextContents();
 async function assertNavigation(page, expected) {
-  assert.equal(await page.locator('.console-sidebar .console-nav-item.active').count(), 1);
-  assert.equal(await page.locator('.console-sidebar [aria-current]').count(), 1);
-  assert.equal(await page.locator(expected).getAttribute('aria-current'), 'page');
-  assert.equal(await page.locator(expected).evaluate(node => node.classList.contains('active')), true);
+  assert.equal(await page.locator('.liquid-dock .dock-item.active').count(), 1);
+  assert.equal(await page.locator('.liquid-dock [aria-current]').count(), 1);
+  assert.equal(await page.locator(`[data-dock="${expected}"]`).getAttribute('aria-current'), 'page');
 }
 
 test('GPU refresh preserves multiple expanded cards, all-closed state and browser reload', async t => {
   const page = await dashboard(t);
-  await page.locator('[data-console-view="dreams"]').click();
+  await page.locator('[data-dock="dreams"]').click();
   await page.waitForFunction(() => document.querySelectorAll('details.dream-overview-card').length === 3);
   await page.locator('details.dream-overview-card').nth(1).locator('summary').click();
   assert.deepEqual(await openCards(page), ['alpha', 'beta']);
@@ -71,25 +70,26 @@ test('GPU refresh preserves multiple expanded cards, all-closed state and browse
   assert.deepEqual(await openCards(page), []);
 });
 
-test('sidebar highlights only the current view after every refresh and language switch', async t => {
+test('dock highlights only the current view after refresh and language switch', async t => {
   const page = await dashboard(t);
-  for (const selector of ['[data-console-view="tasks"]', '[data-console-view="dreams"]', '[data-dream="beta"]', '[data-console-view="connectors"]']) {
-    await page.locator(selector).click();
+  for (const key of ['tasks', 'dreams', 'connectors']) {
+    await page.locator(`[data-dock="${key}"]`).click();
     await page.evaluate(async () => { await loadMonitors(); await loadAll(); });
     await page.clock.runFor(16000);
-    await assertNavigation(page, selector);
+    await assertNavigation(page, key);
     await page.evaluate(() => { lang = lang === 'zh' ? 'en' : 'zh'; window.renderPage(); });
-    await assertNavigation(page, selector);
+    await assertNavigation(page, key);
   }
-  await page.locator('[data-dream="beta"]').click();
+  await page.evaluate(() => { selectedServerId = 'beta'; setConsoleView('server'); });
+  await assertNavigation(page, 'dreams');
   await page.reload();
   await page.waitForFunction(() => document.querySelectorAll('[data-dream]').length === 3);
-  await assertNavigation(page, '[data-dream="beta"]');
+  await assertNavigation(page, 'dreams');
 });
 
 test('GPU refresh retains cards while loading and accepts toggles during an in-flight request', async t => {
   const page = await dashboard(t);
-  await page.locator('[data-console-view="dreams"]').click();
+  await page.locator('[data-dock="dreams"]').click();
   await page.waitForFunction(() => document.querySelectorAll('details.dream-overview-card').length === 3);
   await page.evaluate(() => {
     const originalApi = api;
@@ -107,7 +107,7 @@ test('GPU refresh retains cards while loading and accepts toggles during an in-f
 
 test('late snapshot responses cannot overwrite a newer GPU refresh', async t => {
   const page = await dashboard(t);
-  await page.locator('[data-console-view="dreams"]').click();
+  await page.locator('[data-dock="dreams"]').click();
   await page.waitForFunction(() => document.querySelectorAll('details.dream-overview-card').length === 3);
   await page.evaluate(() => {
     const originalApi = api;
