@@ -46,9 +46,14 @@ test('whole process card drags into a named group; group picker and rename work'
       data = groups[0];
       data.status = 'RUNNING';
     } else if (pathName === '/api/watch-groups/g1/cancel') {
-      data = groups[0];
-      data.status = 'CANCELLED';
-      monitors.forEach(m => { if (m.group_id === 'g1') m.status = 'CANCELLED'; });
+      data = { ...groups[0], status: 'CANCELLED' };
+      groups.splice(0, 1);
+      for (let i = monitors.length - 1; i >= 0; i--) {
+        if (monitors[i].group_id === 'g1') monitors.splice(i, 1);
+      }
+    } else if (pathName === '/api/watch-groups/g1' && request.method() === 'DELETE') {
+      groups.splice(0, 1);
+      data = { deleted: 'g1' };
     } else if (pathName === '/api/monitors/m1/rename') {
       data = monitors[0];
       data.name = request.postDataJSON().name;
@@ -78,9 +83,13 @@ test('whole process card drags into a named group; group picker and rename work'
   assert.equal(await page.locator('#monitor-msg').textContent(), '');
   await page.locator('[data-start-group="g1"]').click();
   await page.locator('[data-cancel-group="g1"]').click();
-  await page.locator('.watch-group[data-group-status="CANCELLED"]').waitFor();
+  await page.locator('.watch-group').waitFor({ state: 'detached' });
   assert.equal(await page.locator('[data-cancel-group="g1"]').count(), 0);
-  assert.equal(monitors.filter(m => m.status === 'CANCELLED').length, 2);
+  assert.equal(monitors.length, 0);
+  groups.push({ id: 'g1', name: 'Old cancelled watch', status: 'CANCELLED' });
+  await page.evaluate(() => loadMonitors());
+  await page.locator('.watch-group[data-group-status="CANCELLED"] [data-delete-group="g1"]').click();
+  await page.locator('.watch-group').waitFor({ state: 'detached' });
 });
 
 test('connector routing selection stays readable and header keeps only language switch', async t => {

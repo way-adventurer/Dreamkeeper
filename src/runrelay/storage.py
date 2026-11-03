@@ -180,3 +180,9 @@ class Storage:
     def delete_watch_group(self, group_id: str) -> None:
         with self._connect() as connection:
             connection.execute("DELETE FROM watch_groups WHERE id = ?", (group_id,))
+
+    def delete_watch_group_with_monitors(self, group_id: str, monitor_ids: list[str]) -> None:
+        with self._connect() as connection:
+            for monitor_id in monitor_ids:
+                connection.execute("DELETE FROM process_monitors WHERE id = ?", (monitor_id,))
+            connection.execute("DELETE FROM watch_groups WHERE id = ?", (group_id,))

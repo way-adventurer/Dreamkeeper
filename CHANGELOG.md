@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.2.2 - 2026-11-03
+
+- Remove cancelled group cards, member monitor records, and their logs when cancelling a group; allow deleting older cancelled groups.
+
 ## 0.2.1 - 2026-11-03
 
 - Let users cancel a running group watch without stopping remote processes or sending a completion notice.

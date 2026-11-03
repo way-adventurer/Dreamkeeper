@@ -327,16 +327,29 @@ class ServerMonitorService:
         self.storage.put_watch_group(group)
         for monitor in self._group_members(group_id):
             self.stop_monitor(monitor.id)
+        self.delete_watch_group(group_id)
         return group
 
     def delete_watch_group(self, group_id: str) -> None:
         group = self._watch_group(group_id)
-        if group.status != "DRAFT":
-            raise ValueError("只能删除尚未开始的组合守梦")
-        for monitor in self._group_members(group_id):
-            monitor.group_id = None
-            self.storage.put_monitor(monitor)
-        self.storage.delete_watch_group(group_id)
+        members = self._group_members(group_id)
+        if group.status == "DRAFT":
+            for monitor in members:
+                monitor.group_id = None
+                self.storage.put_monitor(monitor)
+            self.storage.delete_watch_group(group_id)
+            return
+        if group.status != "CANCELLED":
+            raise ValueError("只能删除尚未开始或已取消的组合守梦")
+        if any(monitor.status == "RUNNING" for monitor in members):
+            raise ValueError("组合中仍有运行中的监视任务")
+        self.storage.delete_watch_group_with_monitors(group_id, [monitor.id for monitor in members])
+        log_root = (self.root / "monitor_logs").resolve()
+        for monitor in members:
+            if monitor.log_path:
+                log_path = Path(monitor.log_path).resolve()
+                if log_path.is_relative_to(log_root):
+                    log_path.unlink(missing_ok=True)
 
     def _watch_group(self, group_id: str) -> WatchGroup:
         group = self.storage.get_watch_group(group_id)
@@ -381,20 +394,22 @@ class ServerMonitorService:
             self.storage.put_snapshot(snapshot)
         except ServerMonitorError as exc:
             latest = self.storage.get_monitor(monitor_id)
-            if latest:
-                if latest.status != "RUNNING":
-                    return latest
-                monitor.name, monitor.group_id = latest.name, latest.group_id
+            if latest is None:
+                return monitor
+            if latest.status != "RUNNING":
+                return latest
+            monitor.name, monitor.group_id = latest.name, latest.group_id
             monitor.last_error = str(exc)
             self.storage.put_monitor(monitor)
             self._write_log(monitor, f"poll failed: {exc}")
             return monitor
         # The user may have renamed or grouped this monitor while the SSH probe ran.
         latest = self.storage.get_monitor(monitor_id)
-        if latest:
-            if latest.status != "RUNNING":
-                return latest
-            monitor.name, monitor.group_id = latest.name, latest.group_id
+        if latest is None:
+            return monitor
+        if latest.status != "RUNNING":
+            return latest
+        monitor.name, monitor.group_id = latest.name, latest.group_id
         targets = matching_processes(snapshot.processes, monitor.pid, monitor.command_filter, monitor.user_filter)
         if targets:
             monitor.last_seen_at = now()

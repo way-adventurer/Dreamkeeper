@@ -87,6 +87,10 @@ def test_draft_requires_two_processes_and_cancelled_member_prevents_success(tmp_
     assert storage.get_watch_group(group.id).status == "CANCELLED"
     assert notifier.individual == []
     assert notifier.groups == []
+    service.delete_watch_group(group.id)
+    assert storage.get_watch_group(group.id) is None
+    assert storage.get_monitor(first.id) is None
+    assert storage.get_monitor(second.id) is None
 
 
 def test_cancel_running_group_stops_watching_without_completion_notice(tmp_path, monkeypatch):
@@ -106,8 +110,33 @@ def test_cancel_running_group_stops_watching_without_completion_notice(tmp_path,
     assert cancelled.status == "CANCELLED"
     assert cancelled.ended_at
     assert cancelled.notification_status == "SKIPPED"
-    assert all(storage.get_monitor(m.id).status == "CANCELLED" for m in (first, second))
+    assert storage.get_watch_group(group.id) is None
+    assert all(storage.get_monitor(m.id) is None for m in (first, second))
+    assert all(not (tmp_path / "monitor_logs" / f"{m.id}.log").exists() for m in (first, second))
     assert notifier.individual == []
     assert notifier.groups == []
-    with pytest.raises(ValueError, match="守梦中"):
+    with pytest.raises(KeyError, match="Unknown group"):
         service.cancel_watch_group(group.id)
+
+
+def test_in_flight_poll_does_not_restore_deleted_group_monitor(tmp_path, monkeypatch):
+    service, storage, _, profile = make_service(
+        tmp_path, monkeypatch, [probe_output(101, 202), probe_output(101, 202)],
+    )
+    first = service.start_monitor(server_id=profile.id, pid=101)
+    second = service.start_monitor(server_id=profile.id, pid=202)
+    group = service.create_watch_group("取消中")
+    service.add_monitor_to_group(group.id, first.id)
+    service.add_monitor_to_group(group.id, second.id)
+    service.start_watch_group(group.id)
+    snapshot = storage.get_snapshot(profile.id)
+
+    def collect_after_cancel(_profile):
+        service.cancel_watch_group(group.id)
+        return snapshot
+
+    monkeypatch.setattr(service, "collect", collect_after_cancel)
+    service.refresh_monitor(first.id)
+    assert storage.get_watch_group(group.id) is None
+    assert storage.get_monitor(first.id) is None
+    assert storage.get_monitor(second.id) is None

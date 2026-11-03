@@ -172,7 +172,11 @@ class RunRelayService:
                     if experiment.status not in TERMINAL_STATUSES:
                         self.refresh(experiment.id)
                 for monitor in self.storage.list_monitors(active_only=True):
-                    self.servers.refresh_monitor(monitor.id)
+                    try:
+                        self.servers.refresh_monitor(monitor.id)
+                    except KeyError:
+                        # A group can be cancelled after this poll's active list is read.
+                        continue
                 for profile in self.storage.list_servers():
                     self.servers.refresh_watch(profile.id)
                 time.sleep(max(0.1, interval))

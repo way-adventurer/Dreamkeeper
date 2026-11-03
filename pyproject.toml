@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "dreamkeeper"
-version = "0.2.1"
+version = "0.2.2"
 description = "Dreamkeeper, a local-first runtime that watches research workloads and wakes AI only when they finish."
 readme = "README.md"
 requires-python = ">=3.10"
